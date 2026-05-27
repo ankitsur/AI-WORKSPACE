@@ -10,5 +10,6 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "redis>=7.4.0",
     "sse-starlette>=3.4.4",
+    "tavily-python>=0.7.24",
     "uvicorn>=0.48.0",
 ]

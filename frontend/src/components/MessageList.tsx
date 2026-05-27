@@ -1,11 +1,17 @@
 import type { ChatMessage } from "../types/chat";
+import ReactMarkdown from "react-markdown";
+
 
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
 }
 
-export function MessageList({ messages }: MessageListProps) {
+
+export function MessageList({
+  messages,
+  isStreaming,
+}: MessageListProps) {
   return (
     <div className="message-list">
       {messages.map((message) => (
@@ -14,7 +20,9 @@ export function MessageList({ messages }: MessageListProps) {
           className={`message ${message.role}`}
         >
           <div className="message-content">
-            {message.content || "Thinking..."}
+            <ReactMarkdown>
+              {message.content || (isStreaming ? "Thinking..." : "")}
+            </ReactMarkdown>
           </div>
         </div>
       ))}

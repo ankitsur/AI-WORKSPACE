@@ -38,6 +38,42 @@ body {
   overflow: hidden;
 }
 
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid #1e293b;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.95));
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.12);
+  padding: 6px;
+}
+
+.brand-label {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.brand-subtitle {
+  margin-top: 2px;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
 .message-list {
   flex: 1;
 

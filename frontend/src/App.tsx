@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+// import heroLogo from "./assets/hero.png";
 import { ChatComposer } from "./components/ChatComposer";
 import { MessageList } from "./components/MessageList";
 import type { ChatMessage, ChatStatus } from "./types/chat";

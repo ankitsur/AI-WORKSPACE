@@ -11,11 +11,61 @@ client = AsyncOpenAI(
 )
 
 
+async def detect_tool(user_message: str):
+
+    response = await client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+You are a tool routing assistant.
+
+Your task:
+Determine whether the user needs
+web search.
+
+Return ONLY:
+
+SEARCH
+
+or
+
+NONE
+"""
+            },
+            {
+                "role": "user",
+                "content": user_message
+            }
+        ]
+    )
+
+    return response.choices[0].message.content.strip()
+
+
 async def stream_ai_response(messages):
+
+    system_prompt = {
+        "role": "system",
+        "content": """
+You are an AI research assistant.
+
+Answer clearly and accurately.
+
+If web search context is provided,
+use it to answer the user question.
+"""
+    }
+
+    final_messages = [
+        system_prompt,
+        *messages
+    ]
 
     stream = await client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=messages,
+        messages=final_messages,
         stream=True
     )
 
