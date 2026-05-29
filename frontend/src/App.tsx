@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 
-// import heroLogo from "./assets/hero.png";
 import { ChatComposer } from "./components/ChatComposer";
 import { MessageList } from "./components/MessageList";
 import type { ChatMessage, ChatStatus } from "./types/chat";
@@ -16,7 +15,6 @@ function App() {
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<ChatStatus>("idle");
 
-  // Persistent conversation ID
   const conversationId = useRef(crypto.randomUUID());
 
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -99,7 +97,7 @@ function App() {
               message.id === assistantMessageId
                 ? {
                     ...message,
-                    content: "Something went wrong.",
+                    content: "Something went wrong. Please try again.",
                     status: "error",
                   }
                 : message,
@@ -114,9 +112,53 @@ function App() {
     }
   };
 
+  const handleNewChat = () => {
+    if (status === "streaming") return;
+
+    conversationId.current = crypto.randomUUID();
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        content: "Hi! How can I help you today?",
+        timestamp: makeTimestamp(),
+        status: "complete",
+      },
+    ]);
+    setDraft("");
+    setStatus("idle");
+  };
+
   return (
     <div className="chat-app">
       <div className="chat-container">
+        <header className="app-header">
+          <div className="brand-mark">
+            <div className="brand-logo" aria-hidden>
+              AI
+            </div>
+            <div>
+              <div className="brand-label">AI Workspace</div>
+              <div className="brand-subtitle">Ask questions, get answers</div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="new-chat-button"
+            onClick={handleNewChat}
+            disabled={status === "streaming"}
+          >
+            New chat
+          </button>
+        </header>
+
+        {status === "error" && (
+          <div className="status-banner error" role="status">
+            Connection issue — check that the backend is running.
+          </div>
+        )}
+
         <MessageList
           messages={messages}
           isStreaming={status === "streaming"}
