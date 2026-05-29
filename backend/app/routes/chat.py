@@ -8,13 +8,12 @@ from app.services.redis_service import (
     get_conversation_history
 )
 
-from app.tools.search_tool import (
-    search_web
+from app.services.openai_service import (
+    stream_ai_response
 )
 
-from app.services.openai_service import (
-    stream_ai_response,
-    detect_tool
+from app.services.agent_service import (
+    run_agent
 )
 
 router = APIRouter()
@@ -35,47 +34,9 @@ async def chat(request: ChatRequest):
         request.conversation_id
     )
 
-    tool_decision = await detect_tool(
-        user_message
+    messages = await run_agent(
+        messages
     )
-
-    print(
-        f"Tool Decision: {tool_decision}"
-    )
-
-    if tool_decision == "SEARCH":
-
-        results = await search_web(
-            user_message
-        )
-
-        print(
-            f"Search Results Count: {len(results)}"
-        )
-
-        search_context = "\n\n".join([
-            f"""
-Title: {result.get("title")}
-
-Content:
-{result.get("content")}
-"""
-            for result in results
-        ])
-
-        messages.append({
-            "role": "system",
-            "content": f"""
-You are provided with
-web search results below.
-
-Use them to answer accurately.
-
-Web Search Results:
-
-{search_context}
-"""
-        })
 
     async def generate():
 

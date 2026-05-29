@@ -10,6 +10,26 @@ client = AsyncOpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": "Search the web for recent or factual information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
+
 
 async def detect_tool(user_message: str):
 
