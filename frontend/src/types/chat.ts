@@ -17,3 +17,17 @@ export interface ChatMessage {
   timestamp: string;
   status: MessageStatus;
 }
+
+export interface ConversationSummary {
+  conversation_id: string;
+  title: string;
+  updated_at: number;
+  last_message_preview?: string | null;
+}
+
+export interface StoredMessage {
+  message_sk: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+}

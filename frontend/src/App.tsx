@@ -1,31 +1,104 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ChatComposer } from "./components/ChatComposer";
+import { ChatSidebar } from "./components/ChatSidebar";
 import { MessageList } from "./components/MessageList";
-import type { ChatMessage, ChatStatus } from "./types/chat";
-import { streamChat } from "./utils/api";
+import type {
+  ChatMessage,
+  ChatStatus,
+  ConversationSummary,
+  StoredMessage,
+} from "./types/chat";
+import {
+  fetchConversationMessages,
+  fetchConversations,
+  streamChat,
+} from "./utils/api";
 
-const makeTimestamp = () =>
-  new Date().toLocaleTimeString([], {
+const makeTimestamp = (iso?: string) => {
+  const date = iso ? new Date(iso) : new Date();
+  return date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+const welcomeMessage = (): ChatMessage => ({
+  id: "welcome",
+  role: "assistant",
+  content: "Hi! How can I help you today?",
+  timestamp: makeTimestamp(),
+  status: "complete",
+});
+
+const storedToChatMessages = (stored: StoredMessage[]): ChatMessage[] =>
+  stored.map((message) => ({
+    id: message.message_sk,
+    role: message.role,
+    content: message.content,
+    timestamp: makeTimestamp(message.created_at),
+    status: "complete",
+  }));
 
 function App() {
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<ChatStatus>("idle");
+  const [conversations, setConversations] = useState<ConversationSummary[]>(
+    [],
+  );
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
-  const conversationId = useRef(crypto.randomUUID());
+  const [activeConversationId, setActiveConversationId] = useState(() =>
+    crypto.randomUUID(),
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage()]);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "Hi! How can I help you today?",
-      timestamp: makeTimestamp(),
-      status: "complete",
-    },
-  ]);
+  const refreshConversations = useCallback(async () => {
+    try {
+      const items = await fetchConversations();
+      setConversations(items);
+    } catch {
+      setConversations([]);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshConversations();
+  }, [refreshConversations]);
+
+  const loadConversation = async (id: string) => {
+    if (status === "streaming" || id === activeConversationId) {
+      return;
+    }
+
+    setIsLoadingMessages(true);
+    setActiveConversationId(id);
+
+    try {
+      const stored = await fetchConversationMessages(id);
+      setMessages(
+        stored.length > 0 ? storedToChatMessages(stored) : [welcomeMessage()],
+      );
+    } catch {
+      setMessages([welcomeMessage()]);
+    } finally {
+      setIsLoadingMessages(false);
+      setDraft("");
+      setStatus("idle");
+    }
+  };
+
+  const handleNewChat = () => {
+    if (status === "streaming") return;
+
+    setActiveConversationId(crypto.randomUUID());
+    setMessages([welcomeMessage()]);
+    setDraft("");
+    setStatus("idle");
+  };
 
   const handleSend = async () => {
     const nextPrompt = draft.trim();
@@ -54,13 +127,17 @@ function App() {
       status: "streaming",
     };
 
-    setMessages((prev) => [...prev, userMessage, assistantMessage]);
+    const withoutWelcome =
+      messages.length === 1 && messages[0]?.id === "welcome"
+        ? []
+        : messages;
 
+    setMessages([...withoutWelcome, userMessage, assistantMessage]);
     setDraft("");
 
     try {
       await streamChat({
-        conversation_id: conversationId.current,
+        conversation_id: activeConversationId,
         message: nextPrompt,
 
         onChunk: (chunk) => {
@@ -89,6 +166,7 @@ function App() {
           );
 
           setStatus("idle");
+          void refreshConversations();
         },
 
         onError: () => {
@@ -112,57 +190,36 @@ function App() {
     }
   };
 
-  const handleNewChat = () => {
-    if (status === "streaming") return;
-
-    conversationId.current = crypto.randomUUID();
-    setMessages([
-      {
-        id: "welcome",
-        role: "assistant",
-        content: "Hi! How can I help you today?",
-        timestamp: makeTimestamp(),
-        status: "complete",
-      },
-    ]);
-    setDraft("");
-    setStatus("idle");
-  };
-
   return (
     <div className="chat-app">
-      <div className="chat-container">
-        <header className="app-header">
-          <div className="brand-mark">
-            <div className="brand-logo" aria-hidden>
-              AI
-            </div>
-            <div>
-              <div className="brand-label">AI Workspace</div>
-              <div className="brand-subtitle">Ask questions, get answers</div>
-            </div>
-          </div>
+      <ChatSidebar
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        isLoading={isLoadingConversations}
+        disabled={status === "streaming"}
+        onSelect={(id) => void loadConversation(id)}
+        onNewChat={handleNewChat}
+      />
 
-          <button
-            type="button"
-            className="new-chat-button"
-            onClick={handleNewChat}
-            disabled={status === "streaming"}
-          >
-            New chat
-          </button>
+      <div className="chat-container">
+        <header className="app-header chat-main-header">
+          <div className="chat-main-title">Chat</div>
         </header>
 
         {status === "error" && (
           <div className="status-banner error" role="status">
-            Connection issue — check that the backend is running.
+            Connection issue — check that the backend and DynamoDB are running.
           </div>
         )}
 
-        <MessageList
-          messages={messages}
-          isStreaming={status === "streaming"}
-        />
+        {isLoadingMessages ? (
+          <div className="messages-loading">Loading conversation…</div>
+        ) : (
+          <MessageList
+            messages={messages}
+            isStreaming={status === "streaming"}
+          />
+        )}
 
         <ChatComposer
           draft={draft}

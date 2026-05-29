@@ -3,9 +3,9 @@ from fastapi.responses import StreamingResponse
 
 from app.models.chat_model import ChatRequest
 
-from app.services.redis_service import (
+from app.services.dynamodb_service import (
     add_message,
-    get_conversation_history
+    get_conversation_history,
 )
 
 from app.services.openai_service import (

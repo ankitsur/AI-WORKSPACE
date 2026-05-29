@@ -43,3 +43,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# DynamoDB Local (SQLite files written by the container)
+dynamodb-data/*
+!dynamodb-data/.gitkeep
