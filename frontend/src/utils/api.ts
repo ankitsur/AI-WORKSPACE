@@ -4,6 +4,7 @@ import type {
 } from "../types/chat";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
+const PERSIST_FAILED_MARKER = "\x00__PERSIST_FAILED__";
 
 interface StreamChatParams {
   conversation_id: string;
@@ -11,6 +12,10 @@ interface StreamChatParams {
   onChunk: (chunk: string) => void;
   onComplete: () => void;
   onError: (message: string) => void;
+}
+
+interface StreamChatResult {
+  persistFailed: boolean;
 }
 
 export async function fetchConversations(): Promise<ConversationSummary[]> {
@@ -43,7 +48,7 @@ export async function streamChat({
   onChunk,
   onComplete,
   onError,
-}: StreamChatParams) {
+}: StreamChatParams): Promise<StreamChatResult> {
   try {
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: "POST",
@@ -67,6 +72,8 @@ export async function streamChat({
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let persistFailed = false;
+    let pending = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -75,16 +82,36 @@ export async function streamChat({
         break;
       }
 
-      const chunk = decoder.decode(value);
-      onChunk(chunk);
+      pending += decoder.decode(value, { stream: true });
+
+      if (pending.includes(PERSIST_FAILED_MARKER)) {
+        persistFailed = true;
+        pending = pending.replace(PERSIST_FAILED_MARKER, "");
+      }
+
+      if (pending) {
+        onChunk(pending);
+        pending = "";
+      }
+    }
+
+    pending += decoder.decode();
+    if (pending.includes(PERSIST_FAILED_MARKER)) {
+      persistFailed = true;
+      pending = pending.replace(PERSIST_FAILED_MARKER, "");
+    }
+    if (pending) {
+      onChunk(pending);
     }
 
     onComplete();
+    return { persistFailed };
   } catch (error) {
     onError(
       error instanceof Error
         ? error.message
         : "Unknown error",
     );
+    return { persistFailed: false };
   }
 }

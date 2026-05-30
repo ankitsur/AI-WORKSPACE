@@ -1,7 +1,7 @@
 uvicorn app.main:app --reload
 .venv\Scripts\Activate.ps1
 
-## DynamoDB Local (Docker)
+## DynamoDB Local + Redis (Docker)
 
 From the repo root (`AI-Workspace`):
 
@@ -9,19 +9,15 @@ From the repo root (`AI-Workspace`):
 docker compose up -d
 ```
 
-Create tables (once):
+Create DynamoDB tables (once):
 
 ```powershell
 cd backend
 uv run python scripts/create_dynamodb_tables.py
 ```
 
-Endpoint: `http://localhost:8000` (DynamoDB). The FastAPI app also defaults to port 8000 — run the API on another port if both run locally, e.g. `uvicorn app.main:app --reload --port 8001`, and set `DYNAMODB_ENDPOINT_URL=http://localhost:8000`.
+- DynamoDB: `http://localhost:8001`
+- Redis: `localhost:6379` (24h TTL on cached conversations)
+- FastAPI: `http://localhost:8000`
 
-Data directory: `../dynamodb-data` (bind-mounted into the container).
-
-Stop DynamoDB (data is kept on disk):
-
-```powershell
-docker compose down
-```
+Chat flow: Redis first for reads; DynamoDB persists each turn after the assistant reply finishes.

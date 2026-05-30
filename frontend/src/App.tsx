@@ -48,6 +48,7 @@ function App() {
   );
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   const [activeConversationId, setActiveConversationId] = useState(() =>
     crypto.randomUUID(),
@@ -76,6 +77,7 @@ function App() {
 
     setIsLoadingMessages(true);
     setActiveConversationId(id);
+    setPersistError(null);
 
     try {
       const stored = await fetchConversationMessages(id);
@@ -98,6 +100,7 @@ function App() {
     setMessages([welcomeMessage()]);
     setDraft("");
     setStatus("idle");
+    setPersistError(null);
   };
 
   const handleSend = async () => {
@@ -108,6 +111,7 @@ function App() {
     }
 
     setStatus("streaming");
+    setPersistError(null);
 
     const userMessage: ChatMessage = {
       id: `user-${crypto.randomUUID()}`,
@@ -136,7 +140,7 @@ function App() {
     setDraft("");
 
     try {
-      await streamChat({
+      const { persistFailed } = await streamChat({
         conversation_id: activeConversationId,
         message: nextPrompt,
 
@@ -185,6 +189,12 @@ function App() {
           setStatus("error");
         },
       });
+
+      if (persistFailed) {
+        setPersistError(
+          "This conversation could not be saved. Your reply is visible here but may not appear after refresh.",
+        );
+      }
     } catch {
       setStatus("error");
     }
@@ -208,7 +218,7 @@ function App() {
 
         {status === "error" && (
           <div className="status-banner error" role="status">
-            Connection issue — check that the backend and DynamoDB are running.
+            Connection issue — check that the backend is running.
           </div>
         )}
 
@@ -219,6 +229,12 @@ function App() {
             messages={messages}
             isStreaming={status === "streaming"}
           />
+        )}
+
+        {persistError && (
+          <div className="persist-banner error" role="status">
+            {persistError}
+          </div>
         )}
 
         <ChatComposer

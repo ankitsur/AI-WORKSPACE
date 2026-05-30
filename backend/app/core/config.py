@@ -18,3 +18,9 @@ CONVERSATIONS_TABLE = os.getenv("CONVERSATIONS_TABLE", "conversations")
 MESSAGES_TABLE = os.getenv("MESSAGES_TABLE", "messages")
 
 CONVERSATION_LIST_KEY = "CHAT"
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_TTL_SECONDS = int(os.getenv("REDIS_TTL_SECONDS", str(24 * 60 * 60)))
+
+PERSIST_FAILED_MARKER = "\x00__PERSIST_FAILED__"

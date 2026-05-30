@@ -48,86 +48,82 @@ def _title_from_message(message: str) -> str:
     return trimmed[:59] + "…"
 
 
-def _message_sk() -> str:
+def make_message_sk() -> str:
     return f"{_now_ms():013d}#{uuid4().hex[:8]}"
 
 
-async def upsert_conversation_on_message(
-    conversation_id: str,
-    *,
-    user_message: str | None = None,
-    last_preview: str,
-) -> None:
-    now_ms = _now_ms()
-    now_iso = _iso_now()
-
+async def get_conversation_latest_message_sk(conversation_id: str) -> str | None:
     async with _dynamodb() as dynamodb:
         table = await dynamodb.Table(config.CONVERSATIONS_TABLE)
+        response = await table.get_item(Key={"conversation_id": conversation_id})
 
-        existing = await table.get_item(
+    item = response.get("Item")
+    if not item:
+        return None
+
+    return item.get("latest_message_sk")
+
+
+async def persist_turn(
+    conversation_id: str,
+    *,
+    user_message: str,
+    user_sk: str,
+    user_created_at: str,
+    assistant_message: str,
+    assistant_sk: str,
+    assistant_created_at: str,
+) -> None:
+    now_ms = _now_ms()
+
+    async with _dynamodb() as dynamodb:
+        messages_table = await dynamodb.Table(config.MESSAGES_TABLE)
+        conversations_table = await dynamodb.Table(config.CONVERSATIONS_TABLE)
+
+        existing = await conversations_table.get_item(
             Key={"conversation_id": conversation_id},
         )
         is_new = "Item" not in existing
 
         title = (
             _title_from_message(user_message)
-            if is_new and user_message
+            if is_new
             else existing.get("Item", {}).get("title", "New chat")
         )
 
-        item = {
+        await messages_table.put_item(
+            Item={
+                "conversation_id": conversation_id,
+                "message_sk": user_sk,
+                "role": "user",
+                "content": user_message,
+                "created_at": user_created_at,
+            }
+        )
+
+        await messages_table.put_item(
+            Item={
+                "conversation_id": conversation_id,
+                "message_sk": assistant_sk,
+                "role": "assistant",
+                "content": assistant_message,
+                "created_at": assistant_created_at,
+            }
+        )
+
+        conversation_item = {
             "conversation_id": conversation_id,
             "list_key": config.CONVERSATION_LIST_KEY,
             "updated_at": now_ms,
             "title": title,
-            "last_message_preview": _preview(last_preview),
+            "last_message_preview": _preview(assistant_message),
+            "latest_message_sk": assistant_sk,
         }
 
         if is_new:
-            item["created_at"] = now_iso
+            conversation_item["created_at"] = _iso_now()
 
-        await table.put_item(Item=item)
-
-
-async def add_message(
-    conversation_id: str,
-    role: str,
-    content: str,
-) -> None:
-    message_sk = _message_sk()
-    created_at = _iso_now()
-
-    async with _dynamodb() as dynamodb:
-        table = await dynamodb.Table(config.MESSAGES_TABLE)
-        await table.put_item(
-            Item={
-                "conversation_id": conversation_id,
-                "message_sk": message_sk,
-                "role": role,
-                "content": content,
-                "created_at": created_at,
-            }
-        )
-
-    await upsert_conversation_on_message(
-        conversation_id,
-        user_message=content if role == "user" else None,
-        last_preview=content,
-    )
-
-
-async def get_conversation_history(conversation_id: str) -> list[dict]:
-    async with _dynamodb() as dynamodb:
-        table = await dynamodb.Table(config.MESSAGES_TABLE)
-        response = await table.query(
-            KeyConditionExpression=Key("conversation_id").eq(conversation_id),
-            ScanIndexForward=True,
-        )
-
-    return [
-        {"role": item["role"], "content": item["content"]}
-        for item in response.get("Items", [])
-    ]
+        await conversations_table.put_item(Item=conversation_item)
 
 
 async def list_conversations(limit: int = 50) -> list[dict]:
