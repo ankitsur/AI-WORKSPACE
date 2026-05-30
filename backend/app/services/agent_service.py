@@ -1,5 +1,6 @@
 import json
 import re
+import time
 
 from openai import BadRequestError
 
@@ -11,6 +12,13 @@ from app.tools.python_tool import execute_python
 
 MAX_ITERATIONS = 5
 MODEL = "llama-3.3-70b-versatile"
+
+
+def _preview(text: str, limit: int = 300) -> str:
+    trimmed = text.strip().replace("\n", " ")
+    if len(trimmed) <= limit:
+        return trimmed
+    return trimmed[: limit - 1] + "…"
 
 AGENT_SYSTEM_PROMPT = {
     "role": "system",
@@ -90,13 +98,25 @@ async def _inject_tool_context(messages: list[dict], tool_result: str) -> list[d
 async def _manual_tool_fallback(
     messages: list[dict],
     error: BadRequestError | None = None,
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     parsed = _parse_failed_tool_generation(error) if error else None
+    traces: list[dict] = []
 
     if parsed:
         tool_name, arguments = parsed
         tool_result = await _execute_tool(tool_name, arguments)
-        return await _inject_tool_context(messages, tool_result)
+        traces.append(
+            {
+                "iteration": 1,
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "result_preview": _preview(tool_result),
+                "duration_ms": None,
+                "status": "success",
+                "source": "fallback",
+            }
+        )
+        return await _inject_tool_context(messages, tool_result), traces
 
     last_user = next(
         (message["content"] for message in reversed(messages) if message["role"] == "user"),
@@ -104,20 +124,33 @@ async def _manual_tool_fallback(
     )
 
     if not last_user:
-        return messages
+        return messages, traces
 
     routing = await detect_tool(last_user)
     if routing != "SEARCH":
-        return messages
+        return messages, traces
 
     tool_result = await _execute_tool("search_web", {"query": last_user})
-    return await _inject_tool_context(messages, tool_result)
+    traces.append(
+        {
+            "iteration": 1,
+            "tool_name": "search_web",
+            "arguments": {"query": last_user},
+            "result_preview": _preview(tool_result),
+            "duration_ms": None,
+            "status": "success",
+            "source": "fallback",
+        }
+    )
+    return await _inject_tool_context(messages, tool_result), traces
 
 
-async def run_agent(messages: list[dict]) -> list[dict]:
+async def run_agent(messages: list[dict]) -> tuple[list[dict], list[dict]]:
     agent_messages = [AGENT_SYSTEM_PROMPT, *messages]
 
     iterations = 0
+
+    traces: list[dict] = []
 
     while iterations < MAX_ITERATIONS:
         try:
@@ -136,7 +169,7 @@ async def run_agent(messages: list[dict]) -> list[dict]:
         message = response.choices[0].message
 
         if not message.tool_calls:
-            return _without_system(agent_messages)
+            return _without_system(agent_messages), traces
 
         agent_messages.append(
             {
@@ -149,7 +182,26 @@ async def run_agent(messages: list[dict]) -> list[dict]:
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             arguments = json.loads(tool_call.function.arguments)
-            tool_result = await _execute_tool(tool_name, arguments)
+            start = time.perf_counter()
+            try:
+                tool_result = await _execute_tool(tool_name, arguments)
+                status = "success"
+            except Exception as error:
+                tool_result = f"Tool error: {error}"
+                status = "error"
+            duration_ms = int((time.perf_counter() - start) * 1000)
+
+            traces.append(
+                {
+                    "iteration": len(traces) + 1,
+                    "tool_name": tool_name,
+                    "arguments": arguments,
+                    "result_preview": _preview(tool_result),
+                    "duration_ms": duration_ms,
+                    "status": status,
+                    "source": "structured",
+                }
+            )
 
             agent_messages.append(
                 {
@@ -161,4 +213,4 @@ async def run_agent(messages: list[dict]) -> list[dict]:
 
         iterations += 1
 
-    return _without_system(agent_messages)
+    return _without_system(agent_messages), traces

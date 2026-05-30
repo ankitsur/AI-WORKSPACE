@@ -1,15 +1,19 @@
 import type {
+  AgentTrace,
   ConversationSummary,
   StoredMessage,
 } from "../types/chat";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 const PERSIST_FAILED_MARKER = "\x00__PERSIST_FAILED__";
+const TRACE_START = "\x00__TRACES__BEGIN__";
+const TRACE_END = "\x00__TRACES__END__";
 
 interface StreamChatParams {
   conversation_id: string;
   message: string;
   onChunk: (chunk: string) => void;
+  onTraces: (traces: AgentTrace[]) => void;
   onComplete: () => void;
   onError: (message: string) => void;
 }
@@ -46,6 +50,7 @@ export async function streamChat({
   conversation_id,
   message,
   onChunk,
+  onTraces,
   onComplete,
   onError,
 }: StreamChatParams): Promise<StreamChatResult> {
@@ -75,6 +80,53 @@ export async function streamChat({
     let persistFailed = false;
     let pending = "";
 
+    const drainPending = () => {
+      while (true) {
+        const traceStart = pending.indexOf(TRACE_START);
+        const persistIdx = pending.indexOf(PERSIST_FAILED_MARKER);
+
+        if (persistIdx >= 0 && (traceStart === -1 || persistIdx < traceStart)) {
+          pending = pending.replace(PERSIST_FAILED_MARKER, "");
+          persistFailed = true;
+          continue;
+        }
+
+        if (traceStart >= 0) {
+          const contentBeforeTrace = pending.slice(0, traceStart);
+          if (contentBeforeTrace) {
+            onChunk(contentBeforeTrace);
+          }
+
+          const traceEnd = pending.indexOf(TRACE_END, traceStart + TRACE_START.length);
+          if (traceEnd === -1) {
+            pending = pending.slice(traceStart);
+            break;
+          }
+
+          const traceJson = pending.slice(
+            traceStart + TRACE_START.length,
+            traceEnd,
+          );
+
+          try {
+            onTraces(JSON.parse(traceJson));
+          } catch {
+            // Ignore malformed trace metadata.
+          }
+
+          pending = pending.slice(traceEnd + TRACE_END.length);
+          continue;
+        }
+
+        break;
+      }
+
+      if (pending && !pending.startsWith(TRACE_START)) {
+        onChunk(pending);
+        pending = "";
+      }
+    };
+
     while (true) {
       const { done, value } = await reader.read();
 
@@ -83,26 +135,11 @@ export async function streamChat({
       }
 
       pending += decoder.decode(value, { stream: true });
-
-      if (pending.includes(PERSIST_FAILED_MARKER)) {
-        persistFailed = true;
-        pending = pending.replace(PERSIST_FAILED_MARKER, "");
-      }
-
-      if (pending) {
-        onChunk(pending);
-        pending = "";
-      }
+      drainPending();
     }
 
     pending += decoder.decode();
-    if (pending.includes(PERSIST_FAILED_MARKER)) {
-      persistFailed = true;
-      pending = pending.replace(PERSIST_FAILED_MARKER, "");
-    }
-    if (pending) {
-      onChunk(pending);
-    }
+    drainPending();
 
     onComplete();
     return { persistFailed };

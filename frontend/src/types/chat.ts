@@ -10,12 +10,23 @@ export type ChatStatus =
   | "streaming"
   | "error";
 
+export interface AgentTrace {
+  iteration: number;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  result_preview: string;
+  duration_ms?: number | null;
+  status: string;
+  source?: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: string;
   timestamp: string;
   status: MessageStatus;
+  traces?: AgentTrace[];
 }
 
 export interface ConversationSummary {
@@ -30,4 +41,5 @@ export interface StoredMessage {
   role: ChatRole;
   content: string;
   created_at: string;
+  traces?: AgentTrace[];
 }

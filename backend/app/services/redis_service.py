@@ -32,20 +32,24 @@ async def append_message(
     content: str,
     message_sk: str,
     created_at: str,
+    traces: list[dict] | None = None,
 ) -> None:
-    payload = json.dumps(
-        {
-            "role": role,
-            "content": content,
-            "message_sk": message_sk,
-            "created_at": created_at,
-        }
-    )
+    payload = {
+        "role": role,
+        "content": content,
+        "message_sk": message_sk,
+        "created_at": created_at,
+    }
+
+    if traces is not None:
+        payload["traces"] = traces
+
+    payload_text = json.dumps(payload)
 
     messages_key = _messages_key(conversation_id)
     meta_key = _meta_key(conversation_id)
 
-    await redis_client.rpush(messages_key, payload)
+    await redis_client.rpush(messages_key, payload_text)
     await redis_client.hset(meta_key, "latest_message_sk", message_sk)
     await _refresh_ttl(conversation_id)
 

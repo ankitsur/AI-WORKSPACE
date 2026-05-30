@@ -125,6 +125,43 @@ export function MessageList({ messages, isStreaming }: MessageListProps) {
                     isStreaming && <StreamingDots />}
                 </div>
 
+                {message.traces?.length ? (
+                  <details className="message-traces">
+                    <summary>
+                      Used {message.traces.length} tool
+                      {message.traces.length > 1 ? "s" : ""}
+                    </summary>
+                    <div className="trace-items">
+                      {message.traces.map((trace) => (
+                        <div
+                          key={`${message.id}-${trace.iteration}`}
+                          className="trace-item"
+                        >
+                          <div className="trace-header">
+                            <strong>
+                              {trace.iteration}. {trace.tool_name}
+                            </strong>
+                            <span className="trace-meta">
+                              {trace.status}
+                              {trace.duration_ms != null
+                                ? ` · ${trace.duration_ms}ms`
+                                : ""}
+                            </span>
+                          </div>
+                          <div className="trace-row">
+                            <strong>Arguments:</strong>{" "}
+                            <code>{JSON.stringify(trace.arguments)}</code>
+                          </div>
+                          <div className="trace-row">
+                            <strong>Result:</strong>{" "}
+                            <code>{trace.result_preview}</code>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+
                 {message.status === "error" && (
                   <p className="message-error">Failed to get a response.</p>
                 )}

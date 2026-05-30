@@ -73,6 +73,7 @@ async def persist_turn(
     assistant_message: str,
     assistant_sk: str,
     assistant_created_at: str,
+    assistant_traces: list[dict] | None = None,
 ) -> None:
     now_ms = _now_ms()
 
@@ -101,15 +102,18 @@ async def persist_turn(
             }
         )
 
-        await messages_table.put_item(
-            Item={
-                "conversation_id": conversation_id,
-                "message_sk": assistant_sk,
-                "role": "assistant",
-                "content": assistant_message,
-                "created_at": assistant_created_at,
-            }
-        )
+        assistant_item = {
+            "conversation_id": conversation_id,
+            "message_sk": assistant_sk,
+            "role": "assistant",
+            "content": assistant_message,
+            "created_at": assistant_created_at,
+        }
+
+        if assistant_traces is not None:
+            assistant_item["traces"] = assistant_traces
+
+        await messages_table.put_item(Item=assistant_item)
 
         conversation_item = {
             "conversation_id": conversation_id,
@@ -161,6 +165,7 @@ async def get_messages(conversation_id: str) -> list[dict]:
             "role": item["role"],
             "content": item["content"],
             "created_at": item["created_at"],
+            "traces": item.get("traces"),
         }
         for item in response.get("Items", [])
     ]

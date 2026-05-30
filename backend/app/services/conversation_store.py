@@ -86,6 +86,7 @@ async def complete_turn(
     user_sk: str,
     user_created_at: str,
     assistant_message: str,
+    assistant_traces: list[dict] | None = None,
 ) -> None:
     assistant_sk = dynamodb_service.make_message_sk()
     assistant_created_at = _iso_now()
@@ -96,6 +97,7 @@ async def complete_turn(
         content=assistant_message,
         message_sk=assistant_sk,
         created_at=assistant_created_at,
+        traces=assistant_traces,
     )
 
     await dynamodb_service.persist_turn(
@@ -106,4 +108,5 @@ async def complete_turn(
         assistant_message=assistant_message,
         assistant_sk=assistant_sk,
         assistant_created_at=assistant_created_at,
+        assistant_traces=assistant_traces,
     )

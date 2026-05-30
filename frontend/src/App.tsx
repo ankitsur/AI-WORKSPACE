@@ -4,6 +4,7 @@ import { ChatComposer } from "./components/ChatComposer";
 import { ChatSidebar } from "./components/ChatSidebar";
 import { MessageList } from "./components/MessageList";
 import type {
+  AgentTrace,
   ChatMessage,
   ChatStatus,
   ConversationSummary,
@@ -38,6 +39,7 @@ const storedToChatMessages = (stored: StoredMessage[]): ChatMessage[] =>
     content: message.content,
     timestamp: makeTimestamp(message.created_at),
     status: "complete",
+    traces: message.traces,
   }));
 
 function App() {
@@ -151,6 +153,19 @@ function App() {
                 ? {
                     ...message,
                     content: message.content + chunk,
+                  }
+                : message,
+            ),
+          );
+        },
+
+        onTraces: (traces: AgentTrace[]) => {
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMessageId
+                ? {
+                    ...message,
+                    traces,
                   }
                 : message,
             ),

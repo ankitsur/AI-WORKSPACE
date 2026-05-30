@@ -8,8 +8,12 @@ class ConversationSummary(BaseModel):
     last_message_preview: str | None = None
 
 
+from app.models.trace_model import AgentTrace
+
+
 class StoredMessage(BaseModel):
     role: str
     content: str
     created_at: str
     message_sk: str
+    traces: list[AgentTrace] | None = None
